@@ -11,7 +11,7 @@ st.set_page_config(page_title="Sentiment Analysis Tool")
 def setup_model():
     try:
         # Loading compressed dataset
-        df = pd.read_csv("IMDB Dataset.csv.gz", compression='gzip')
+        df = pd.read_csv("compressed_data.csv.gz", compression='gzip')
         
         # Preprocessing
         df['sentiment'] = df['sentiment'].map({'positive': 1, 'negative': 0})

@@ -7,21 +7,24 @@ from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.metrics import accuracy_score, confusion_matrix
+import csv
 
-# Page config
-st.set_page_config(page_title="Sentiment Analysis Dashboard", layout="wide")
+st.set_page_config(page_title="Sentiment Analysis Dashboard")
 
-st.title("IMDB Sentiment Analysis Tool")
-
-# 1. File Uploader
-uploaded_file = st.file_uploader("Upload your edited_csv_file.csv (CSV or CSV.GZ)", type=['csv', 'gz'])
-
-# We use cache_data to prevent re-running the training logic on every interaction
 @st.cache_data
-def process_and_train(file):
-    # Load data
-    df = pd.read_csv(file, compression='infer')
+def load_and_train():
+    # Load the specific file
+    # quoting=csv.QUOTE_ALL or QUOTE_MINIMAL helps handle reviews with commas
+    df = pd.read_csv(
+        "edited_csv_file.csv", 
+        engine='python', 
+        on_bad_lines='skip',
+        quoting=csv.QUOTE_MINIMAL
+    )
+    
+    # Preprocessing
     df['sentiment'] = df['sentiment'].map({'positive': 1, 'negative': 0})
+    df = df.dropna(subset=['review', 'sentiment'])
     
     # Split
     X_train, X_test, y_train, y_test = train_test_split(
@@ -42,38 +45,45 @@ def process_and_train(file):
     acc = accuracy_score(y_test, y_pred)
     cm = confusion_matrix(y_test, y_pred)
     
-    return tfidf, nb, acc, cm, df.head()
+    return tfidf, nb, acc, cm
 
-if uploaded_file:
-    # Run pipeline
-    tfidf, nb, acc, cm, preview_df = process_and_train(uploaded_file)
-    
-    # --- UI Layout ---
-    col1, col2 = st.columns([1, 1])
-    
+# --- UI Setup ---
+st.title("Movie Review Sentiment Classifier")
+
+try:
+    tfidf, nb, acc, cm = load_and_train()
+
+    st.write(f"**Model Accuracy:** {acc:.4f}")
+
+    # Layout for Matrix and Prediction
+    col1, col2 = st.columns(2)
+
     with col1:
-        st.subheader("Dataset Preview")
-        st.dataframe(preview_df)
-        st.write(f"**Model Accuracy:** {acc:.4f}")
-        
-        st.subheader("Test a Review")
-        user_review = st.text_input("Enter review text:", placeholder="The movie was great!")
-        if user_review:
-            vec = tfidf.transform([user_review])
-            prediction = nb.predict(vec)[0]
-            label = "Positive" if prediction == 1 else "Negative"
-            color = "green" if prediction == 1 else "red"
-            st.markdown(f"Predicted Sentiment: :{color}[**{label}**]")
-
-    with col2:
         st.subheader("Confusion Matrix")
-        fig, ax = plt.subplots(figsize=(5, 4))
+        fig, ax = plt.subplots()
         sns.heatmap(cm, annot=True, fmt='d', cmap='mako', ax=ax,
                     xticklabels=['Negative', 'Positive'],
                     yticklabels=['Negative', 'Positive'])
         ax.set_xlabel("Predicted")
         ax.set_ylabel("Actual")
         st.pyplot(fig)
+        
 
-else:
-    st.info("Please upload the IMDB Dataset to begin.")
+    with col2:
+        st.subheader("Test a Review")
+        user_review = st.text_input("Enter review text:")
+        if user_review:
+            vec = tfidf.transform([user_review])
+            prediction = nb.predict(vec)[0]
+            prob = nb.predict_proba(vec)[0]
+            
+            label = "Positive" if prediction == 1 else "Negative"
+            confidence = prob[1] if prediction == 1 else prob[0]
+            
+            st.info(f"Sentiment: **{label}**")
+            st.write(f"Confidence: {confidence:.2%}")
+
+except FileNotFoundError:
+    st.error("File 'edited_csv_file.csv' not found. Please ensure the file is in the application folder.")
+except Exception as e:
+    st.error(f"An error occurred: {e}")

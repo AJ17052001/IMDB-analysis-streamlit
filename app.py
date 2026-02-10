@@ -6,20 +6,26 @@ import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score, confusion_matrix
 
-# Page configuration
-st.set_page_config(page_title="Sentiment Analysis Dashboard")
+# Page config
+st.set_page_config(page_title="Sentiment Analysis Dashboard", layout="wide")
 
-@st.cache_resource
-def load_and_train():
-    # Load dataset
-    df = pd.read_csv("compressed_data.csv.gz", compression='gzip')
+st.title("IMDB Sentiment Analysis Tool")
+
+# 1. File Uploader
+uploaded_file = st.file_uploader("Upload your compressed_data (CSV or CSV.GZ)", type=['csv', 'gz'])
+
+# We use cache_data to prevent re-running the training logic on every interaction
+@st.cache_data
+def process_and_train(file):
+    # Load data
+    df = pd.read_csv(file, compression='infer')
     df['sentiment'] = df['sentiment'].map({'positive': 1, 'negative': 0})
     
-    # Split data
+    # Split
     X_train, X_test, y_train, y_test = train_test_split(
-        df['review'], df['sentiment'], test_size=0.2, random_state=42, stratify=df['sentiment']
+        df['review'], df['sentiment'], test_size=0.2, random_state=42
     )
     
     # Vectorize
@@ -27,52 +33,47 @@ def load_and_train():
     X_train_tfidf = tfidf.fit_transform(X_train)
     X_test_tfidf = tfidf.transform(X_test)
     
-    # Train model
-    model = MultinomialNB()
-    model.fit(X_train_tfidf, y_train)
+    # Train
+    nb = MultinomialNB()
+    nb.fit(X_train_tfidf, y_train)
     
-    # Generate Confusion Matrix data
-    y_pred = model.predict(X_test_tfidf)
+    # Metrics
+    y_pred = nb.predict(X_test_tfidf)
+    acc = accuracy_score(y_test, y_pred)
     cm = confusion_matrix(y_test, y_pred)
     
-    return tfidf, model, cm
+    return tfidf, nb, acc, cm, df.head()
 
-# App Interface
-st.title("Sentiment Analysis & Model Evaluation")
-
-tfidf, model, cm = load_and_train()
-
-# Sidebar Navigation
-page = st.sidebar.selectbox("Choose a Page", ["Predictor", "Model Metrics"])
-
-if page == "Predictor":
-    st.header("Live Prediction")
-    user_input = st.text_area("Enter a movie review:")
+if uploaded_file:
+    # Run pipeline
+    tfidf, nb, acc, cm, preview_df = process_and_train(uploaded_file)
     
-    if st.button("Analyze"):
-        if user_input:
-            vec_input = tfidf.transform([user_input])
-            pred = model.predict(vec_input)[0]
-            prob = model.predict_proba(vec_input)[0]
-            
-            if pred == 1:
-                st.success(f"Positive ({prob[1]:.2%})")
-            else:
-                st.error(f"Negative ({prob[0]:.2%})")
-        else:
-            st.warning("Please enter text.")
+    # --- UI Layout ---
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.subheader("Dataset Preview")
+        st.dataframe(preview_df)
+        st.write(f"**Model Accuracy:** {acc:.4f}")
+        
+        st.subheader("Test a Review")
+        user_review = st.text_input("Enter review text:", placeholder="The movie was great!")
+        if user_review:
+            vec = tfidf.transform([user_review])
+            prediction = nb.predict(vec)[0]
+            label = "Positive" if prediction == 1 else "Negative"
+            color = "green" if prediction == 1 else "red"
+            st.markdown(f"Predicted Sentiment: :{color}[**{label}**]")
 
-elif page == "Model Metrics":
-    st.header("Confusion Matrix")
-    st.write("This matrix shows how the model performed on the 20% test split.")
-    
-    # Plotting the Confusion Matrix
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='mako', 
-                xticklabels=['Negative', 'Positive'], 
-                yticklabels=['Negative', 'Positive'], ax=ax)
-    plt.xlabel('Predicted')
-    plt.ylabel('Actual')
-    
-    # Display plot in Streamlit
-    st.pyplot(fig)
+    with col2:
+        st.subheader("Confusion Matrix")
+        fig, ax = plt.subplots(figsize=(5, 4))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='mako', ax=ax,
+                    xticklabels=['Negative', 'Positive'],
+                    yticklabels=['Negative', 'Positive'])
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("Actual")
+        st.pyplot(fig)
+
+else:
+    st.info("Please upload the IMDB Dataset to begin.")

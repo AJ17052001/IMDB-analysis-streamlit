@@ -14,7 +14,7 @@ st.set_page_config(page_title="Sentiment Analysis Dashboard", layout="wide")
 st.title("IMDB Sentiment Analysis Tool")
 
 # 1. File Uploader
-uploaded_file = st.file_uploader("Upload your compressed_data (CSV or CSV.GZ)", type=['csv', 'gz'])
+uploaded_file = st.file_uploader("Upload your imdb_review_dataset (CSV or CSV.GZ)", type=['csv', 'gz'])
 
 # We use cache_data to prevent re-running the training logic on every interaction
 @st.cache_data

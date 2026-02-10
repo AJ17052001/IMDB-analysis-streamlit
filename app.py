@@ -96,14 +96,4 @@ try:
             st.pyplot(fig)
             
 
-    else:
-        st.error("Data Error: The model found only one class (all positive or all negative).")
-        st.write("### Data Debugger - First 5 Rows of your CSV:")
-        st.write(processed_df.head())
-        st.write("### Values found in your 'sentiment' column:")
-        st.write(processed_df['sentiment'].value_counts())
-
-except FileNotFoundError:
-    st.error("Could not find 'edited_csv_file.csv'. Please make sure the file is in the same folder as this script.")
-except Exception as e:
-    st.error(f"An unexpected error occurred: {e}")
+   
